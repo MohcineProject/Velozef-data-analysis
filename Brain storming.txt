@@ -1,0 +1,70 @@
+
+Les faciles : 
+Compte de vélo actuel en circulation 
+Compte de vélo en station
+Les types de vélos utilisés 
+Les types que vélozef utilisent beaucoup
+
+
+Les difficiles : 
+Les stations les plus vides fréquement 
+Passage d'une station à une autre 
+Les vélos volés ( il y a 185 ) 
+Le prix moyenne payé par les utilisateurs
+Le mec qui a fait le plus long trajet de la journée 
+Le trajet moyenne également 
+Les créneaux horaires où les gens prennent le plus les vélos
+La station la plus éloignés des autres
+Les station qui se vident et qui coutent à vélozef du carburant ( et explication )
+
+
+Les données : 
+Station_status URL : 
+station_id 
+num_bikes_availabl
+num_docks_available
+
+station_information URL : 
+station_id
+name
+lat
+lon
+capcity
+
+vehicle_types URL : 
+vehicle_type_id
+max_range_meters 
+name
+
+free_bike_status URL :
+lon
+lat
+bike_id
+is_reserved
+is_disabled
+vehicle_type_id
+current_range_meters
+station_id
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
