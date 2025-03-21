@@ -1,0 +1,17 @@
+{
+	"folders": [
+		{
+			"path": "../../Velozef-data-analysis"
+		},
+		{
+			"path": "../../../TP7_architecture_kappa_20250313/TP7_architecture_kappa/kappa"
+		},
+		{
+			"path": "../../../TP7_architecture_kappa_20250313/TP7_architecture_kappa/producer"
+		},
+		{
+			"path": "../../../TP7_architecture_kappa_20250313/TP7_architecture_kappa/scripts"
+		}
+	],
+	"settings": {}
+}

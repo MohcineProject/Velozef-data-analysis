@@ -1,0 +1,60 @@
+version: "3"
+
+services:
+  spark-master:
+    build: .
+    container_name: spark-master
+    networks:
+      - network1
+    ports:
+      - "9080:8080"
+      - "7077:7077"
+      - "4040:4040"
+      - "7003:7000"
+    volumes:
+       - ./apps:/opt/spark-apps
+       - ./data:/opt/spark-data
+    environment:
+      - SPARK_LOCAL_IP=spark-master
+      - SPARK_WORKLOAD=master
+
+  spark-worker-a:
+    build: .
+    container_name: spark-worker-a
+    networks:
+      - network1
+    ports:
+      - "9081:8080"
+      - "7002:7000"
+    depends_on:
+      - spark-master
+    environment:
+      - SPARK_MASTER=spark://spark-master:7077
+      - SPARK_WORKER_CORES=1
+      - SPARK_WORKER_MEMORY=1G
+      - SPARK_DRIVER_MEMORY=1G
+      - SPARK_EXECUTOR_MEMORY=1G
+      - SPARK_WORKLOAD=worker
+      - SPARK_LOCAL_IP=spark-worker-a
+    volumes:
+       - ./apps:/opt/spark-apps
+       - ./data:/opt/spark-data
+
+  cassandra1:
+    image: cassandra:latest
+    container_name: cassandra1
+    ports:
+      - "9042:9042"
+    environment:
+      - CASSANDRA_SEEDS=cassandra1,cassandra2
+      - HEAP_NEWSIZE=128M
+      - MAX_HEAP_SIZE=2048M
+    networks:
+      - network1
+
+
+
+networks:
+  network1:
+    name: mynetwork
+    driver: bridge
