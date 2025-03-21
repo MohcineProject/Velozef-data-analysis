@@ -1,0 +1,28 @@
+version: "3"
+
+services:
+  producer:
+    build: .
+    stdin_open: true # docker run -i
+    tty: true        # docker run -t
+    container_name: producer
+    ports:
+      - '8000:8000'
+    restart: "always"
+    command: /bin/bash
+    networks:
+      - mynetwork
+    volumes:
+      - app:/publisher/app
+
+networks:
+  mynetwork:
+    external: true
+
+volumes:
+  app:
+    driver: local
+    driver_opts:
+      type: 'none'
+      o: 'bind'
+      device: 'Users\Matheo\Documents\ARCHBIG\TP7_architecture_kappa_20250313\TP7_architecture_kappa\producer\app'
