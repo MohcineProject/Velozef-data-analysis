@@ -13,7 +13,7 @@ services:
     networks:
       - mynetwork
     volumes:
-      - app:/publisher/app
+      - app:/producer/app
 
 networks:
   mynetwork:
