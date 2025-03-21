@@ -10,11 +10,9 @@ KAFKA_URL= "kafka:29092"
 
 # Creating the required topics 
 def create_topics() : 
-
     admin_client = KafkaAdminClient(
         bootstrap_servers=KAFKA_URL,
     )
-
     num_partitions=1 
 
     server_topics = admin_client.list_topics() 
