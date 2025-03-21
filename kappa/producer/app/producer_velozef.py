@@ -29,7 +29,7 @@ def main():
     server_topics = admin.list_topics()
     num_partition = 2
     # création du topic si celui-ci n'est pas déjà créé
-    for topic, url_keys_list in topics_urls_keys.items():
+    for topic, _ in topics_urls_keys.items():
         
         if topic not in server_topics:
             try:
@@ -44,18 +44,17 @@ def main():
                 pass
         else:
             print(topic,"est déjà créé")
-
-       
-        producer = KafkaProducer(bootstrap_servers="kafka:29092")
-        while True:
-            response = urllib.request.urlopen(url_keys_list[0])
-            stations = json.loads(response.read().decode())
-            stations = stations['data'][str(url_keys_list[1])]
-            for station in stations:
-                producer.send(topic, json.dumps(stations).encode())
-                
-            print("{} Produced {} station records".format(datetime.fromtimestamp(time.time()), len(stations)))
-            time.sleep(60)
+    producer = KafkaProducer(bootstrap_servers="kafka:29092")
+    while True : 
+        for topic, url_key_list in topics_urls_keys.items():
+            response = urllib.request.urlopen(url_key_list[0])
+            data = json.loads(response.read().decode())
+            data = data['data'][str(url_key_list[1])]
+            for row in data:
+                # print('row:',row)   
+                producer.send(topic, json.dumps(row).encode())
+            print("{} Produced {} station records".format(datetime.fromtimestamp(time.time()), len(data)))
+        time.sleep(60)
 
 if __name__ == "__main__":
     main()
