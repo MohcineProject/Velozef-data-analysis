@@ -24,7 +24,7 @@ def create_topics() :
             new_topic = NewTopic(name=STATION_INFORMATION,num_partition=num_partition, replication_factor=1)
             admin_client.create_topics([new_topic])
         except Exception:
-            print ("[Producer] error creating the kafka topic ") 
+            print ("[Producer] Error creating the kafka topic ") 
 
 
 
