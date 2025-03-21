@@ -19,6 +19,7 @@ services:
       KAFKA_ADVERTISED_HOST_NAME: kafka:9092
       KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
       KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:29092,PLAINTEXT_HOST://localhost:9092
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT
       KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
     networks:
       - network
@@ -50,8 +51,17 @@ services:
     networks:
       - network
     volumes:
-      - ./producer/app:producer/app
+      - app:/publisher/producer/app
   
 networks:
   network:
-    external: true
+    external: false
+    
+volumes:
+  app:
+    driver: local 
+    driver_opts:
+      type: none 
+      o : bind 
+      device : C:\Users\zahdi\Desktop\IMT chapter\Achitecture big data\Big Data project\producer\app
+      
