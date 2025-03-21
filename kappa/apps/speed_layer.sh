@@ -1,1 +1,1 @@
- spark-submit --packages org.apache.spark:spark-sql-kafka-0-10_2.12:3.5.4,com.datastax.spark:spark-cassandra-connector_2.12:3.5.0 --conf spark.cassandra.connection.host=cassandra1 --conf spark.cassandra.connection.port=9042 TP7_speed_layer.py kafka-demo-events
+ spark-submit --packages org.apache.spark:spark-sql-kafka-0-10_2.12:3.5.4,com.datastax.spark:spark-cassandra-connector_2.12:3.5.0 --conf spark.cassandra.connection.host=cassandra1 --conf spark.cassandra.connection.port=9042 speed_layer.py kafka-demo-events
