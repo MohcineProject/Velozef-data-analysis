@@ -2,7 +2,7 @@
 FROM python:3.11-alpine
 
 # Adds metadata to image.
-LABEL maintainer="Laurent"
+LABEL maintainer="Matheo"
 
 # dont write pyc files
 ENV PYTHONDONTWRITEBYTECODE 1
