@@ -88,7 +88,7 @@ This is basically a dummy DFS created from docker Volumes...(maybe not...)
 
 # Run Sample applications
 
-```sh
+<!-- ```sh
 docker exec -it tp3_docker-spark-worker-a bash
 ```
 
@@ -110,40 +110,22 @@ To submit the app connect to one of the workers or the master and execute:
 python3 /opt/spark-apps/TP3_exercice1_DataFrame.py
 ```
 
-![alt text](./images/pyspark-demo.png "Spark UI with pyspark program running")
+![alt text](./images/pyspark-demo.png "Spark UI with pyspark program running") -->
 
+# Lancements
 
-
-# Summary
-
-* We compiled the necessary docker image to run spark master and worker containers.
-
-* We created a spark standalone cluster using 2 worker nodes and 1 master node using docker && docker-compose.
-
-* Copied the resources necessary to run demo applications.
-
-* We ran a distributed application at home(just need enough cpu cores and RAM to do so).
-
-# Why a standalone cluster?
-
-* This is intended to be used for test purposes, basically a way of running distributed spark apps on your laptop or desktop.
-
-* This will be useful to use CI/CD pipelines for your spark apps(A really difficult and hot topic)
-
-# Steps to connect and use a pyspark shell interactively
-
-* Follow the steps to run the docker-compose file. You can scale this down if needed to 1 worker. 
+Lancer simultanéement 3 terminaux, un pour kafka producer, un pour cassandra1, un pour lancer le script de lecture et traitement de flux kafka via Spark Streaming
 
 ```sh
-docker exec -it tp3_docker-spark-worker-a bash
-apt update
-apt install python3-pip
-pip3 install pyspark
-pyspark
+$ docker exec -ti producer bash
+cd .. 
+cd producer/app 
+python3 producer_velozef.py
 ```
 
-# What's left to do?
+```sh
+$ docker exec -ti spark-master bash
+cd ../spark-apps
+bash speed_layer.sh
+```
 
-* Right now to run applications in deploy-mode cluster is necessary to specify arbitrary driver port.
-
-* The spark submit entry in the start-spark.sh is unimplemented, the submit used in the demos can be triggered from any worker
