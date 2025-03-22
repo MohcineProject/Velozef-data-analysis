@@ -6,29 +6,30 @@
 secondes ? 
 
 STREAMING : 
-Compter le nombre de station vides / proche de la saturation (docks_available < 2) (1)
-Calcul du coût moyen des trajets en vélo sur une fenêtre temporelle 
-Compter le nombre de stations vides/pleines
-Compter le nombre de vélos en circulation (free_bike_status, station_information) (bike_id,long,lat)
+Compter le nombre de station vides / proche de la saturation / pleines (fait)
+Calcul du coût moyen des trajets en vélo sur une fenêtre temporelle  ()
 Docks disponibles
-Velos disponibles
+Velos disponibles / Types de vélos disponibles 
+Nombre de vélos desactivés / Réservés
+Vélos "abandonnés" libres mais station_id == ""
+
 
 BATCH : 
--Type de vélo le plus fréquent sur 24h (vehicule_types, count)
--Sur 24h évolution du nombre de vélos disponibles
+- Type de vélo le plus fréquent sur 24h (vehicule_types, count)
+- Nombre de vélos réservés via l'application par stations 
+- Sur 24h évolution du nombre de vélos disponibles
+- Calculer déplacement station d'un vélo. 
+- calculer distances entre les stations 
 
 Simples : 
-Nombre de vélos actuellement en circulation (station_status) (pas possible)
 Statistiques simples :
 	-Distance entre les stations (station_information):
 
-Compter le nombre de vélos en circulation : (free_bike_status, station_information) (bike_id,long,lat)
 
-+ Difficiles :
-Compter le nombre de vélos réservés à la journée / fenêtre temporelle 
+
+Faisables ? :
 batch : 
 Identifier les trajets entre deux stations les plus fréquents (batch)
-Station qui effectue le plus d'échanges de vélo (arrivées, départs) à la journée (station_information, 
 
 BONUS:
 Visualisation sur un Dashboard des stations et le nombre de docks actuellements disponibles pour y déposer un vélo
