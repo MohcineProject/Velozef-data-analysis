@@ -7,7 +7,7 @@ secondes ?
 
 STREAMING : 
 Compter le nombre de station vides / proche de la saturation / pleines (fait)
-Calcul du coût moyen des trajets en vélo sur une fenêtre temporelle  ()
+Calcul du coût moyen des trajets en vélo sur une fenêtre temporelle  (pas d'infos sur les trajets en vélo)
 Docks disponibles
 Velos disponibles / Types de vélos disponibles 
 Nombre de vélos desactivés / Réservés
