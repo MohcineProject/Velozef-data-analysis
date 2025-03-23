@@ -5,13 +5,14 @@ from cassandra.cluster import Cluster
 from threading import Thread
 
 # Configuration constants
-IP_CASSANDRA_NODE = "172.22.0.4"
+IP_CASSANDRA_NODE = "172.22.0.6"
 KAFKA_BOOTSTRAP_SERVERS = "kafka:29092"
 TOPIC_STATION_STATUS = 'station_status'
 TOPIC_STATION_INFORMATION = 'station_information'
 TOPIC_BIKE_STATUS = 'free_bike_status'
 KEYSPACE_NAME = 'velozef'
-CHECKPOINT_LOCATION = "/tmp/checkpoints"
+CHECKPOINT_LOCATION = "/tmp/checkpoints/station_status"
+STATION_STATUS_SAVE_PATH = "../hdfs/station_status"
 
 
 def create_spark_session():
@@ -61,13 +62,14 @@ def create_cassandra_tables(session):
     session.execute(station_information_query)
     session.execute(bike_status_query)
 
+#starting offset latest:
 def read_kafka_stream(spark, topic):
     return spark \
         .readStream \
         .format("kafka") \
         .option("kafka.bootstrap.servers", KAFKA_BOOTSTRAP_SERVERS) \
         .option("subscribe", topic) \
-        .option("startingOffsets", "earliest") \
+        .option("startingOffsets", "latest")\
         .option("failOnDataLoss", "false") \
         .load()
 
@@ -80,7 +82,6 @@ def process_station_status(df_station_status, df_capacity):
     """Traitements : 
     - 1 | Calcul du nombre de stations pleines/vides/proche de saturation par fenêtre de 60 secondes
     - 2 | Calcul du nombre de docks et vélos disponibles au total sur le réseau vélozef
-    - 3 | Calcul du nombre de stations fonctionnelles (qui permettent de déposer et réserver un vélo)
     """
     df_station_status = df_station_status.withColumn("timestamp", to_timestamp(col("last_reported")))
     df_joined = df_station_status.join(df_capacity, "station_id")
@@ -104,8 +105,8 @@ def process_station_status(df_station_status, df_capacity):
                         sum(col("is_empty")).alias("empty_count"),
                         sum(col("is_full")).alias("full_count"),
                         sum(col("saturation")).alias("saturation_count")) \
-                    .withColumn("window_start", date_format(col("window.start"), "yyyy-MM-dd HH:mm:ss")) \
-                    .withColumn("window_end", date_format(col("window.end"), "yyyy-MM-dd HH:mm:ss")) \
+                    .withColumn("window_start", col("window.start")) \
+                    .withColumn("window_end", col("window.end")) \
                     .drop("window")
 
     return windowed_df
@@ -143,6 +144,13 @@ def write_to_cassandra_bike(writeDF, epochId):
         .mode('append') \
         .options(table="bike_status", keyspace=KEYSPACE_NAME) \
         .save()
+
+# definition d'une fonction permettant de sauvegarder un batch de 10 minutes (soit 10 batches) dans un fichier parquet ou json utilise partitionBy pour partitionner les données
+# def save_batch(batch_df, timestamp, batch_id):
+#     batch_df.writeStream \
+#         .partitionBy("station_id") \
+#         .parquet(f"{STATION_STATUS_SAVE_PATH}/batch={batch_id}")
+    
 
 def main():
     # Init Spark
@@ -186,10 +194,7 @@ def main():
     # Stocke les informations de stations_information dans une table Cassandra
     print("Stockage des informations de station_information dans Cassandra...")
     # write df_station_information in console
-    # df_station_information.writeStream \
-    #     .outputMode("append") \
-    #     .format("console") \
-    #     .start()
+
     
     df_station_information.writeStream \
         .format("org.apache.spark.sql.cassandra") \
@@ -201,7 +206,7 @@ def main():
 
     df_capacity = spark.read \
         .format("org.apache.spark.sql.cassandra") \
-        .option("keyspace", str(KEYSPACE_NAME)) \
+        .option("keyspace", KEYSPACE_NAME) \
         .option("table", "station_information") \
         .load()
 
@@ -209,10 +214,18 @@ def main():
     windowed_df = process_station_status(df_station_status, df_capacity)
     abandoned_df = process_abandoned_bikes(df_bike_status)
 
+    # windowed_df.writeStream \
+    # .outputMode("append") \
+    # .format("console") \
+    # .start() \
+    # .awaitTermination()
+
+    # # save batch
+    # save_batch(windowed_df, "00:00", "1")
 
     windowed_df.writeStream \
-    .option("spark.cassandra.connection.host", IP_CASSANDRA_NODE)\
     .foreachBatch(write_to_cassandra_station) \
+    .option("spark.cassandra.connection.host", IP_CASSANDRA_NODE)\
     .option("checkpointLocation", CHECKPOINT_LOCATION) \
     .outputMode("update")\
     .start()\
