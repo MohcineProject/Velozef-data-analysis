@@ -36,3 +36,7 @@ Obtenir les coordonnées de chaque vélo en circulation : (free_bike_status, is_
 BONUS:
 Visualisation sur un Dashboard des stations et le nombre de docks actuellements disponibles pour y déposer un vélo
 Calculer l'itinéraire le plus long à vélo réalisé sur une fenêtre temporelle. 
+
+
+
+Est ce que l'architecture lambda est la meilleur architecture pour notre cas d'usage ?

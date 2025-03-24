@@ -1,6 +1,34 @@
 from pyspark.sql import SparkSession
 from pyspark.sql.functions import from_json, col
 from pyspark.sql.types import StructType, StructField, StringType, IntegerType
+from cassandra.cluster import Cluster
+
+clstr=Cluster(['172.22.0.3'])
+session=clstr.connect()
+
+qry=''' 
+CREATE KEYSPACE IF NOT EXISTS station_information 
+WITH replication = {
+  'class' : 'SimpleStrategy',
+  'replication_factor' : 1
+};'''
+
+
+session.execute(qry)
+
+
+qry = '''
+CREATE TABLE IF NOT EXISTS station_information.saturated_stations (
+station_id int, 
+num_bikes_available int , 
+num_docks_available int , 
+is_installed boolean , 
+is_renting boolean,
+is_returning boolean, 
+)
+'''
+
+session.execute(qry)
 
 # Define the schema of the JSON data
 schema = StructType([
