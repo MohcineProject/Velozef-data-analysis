@@ -4,7 +4,6 @@ from pyspark.sql.functions import col, from_json, window, sum, to_timestamp, cou
 from pyspark.sql.types import StructType, StructField, IntegerType, StringType, TimestampType, BooleanType
 import time
 from cassandra.cluster import Cluster
-from threading import Thread
 
 # Configuration constants
 IP_CASSANDRA_NODE = "172.22.0.4"
@@ -209,7 +208,7 @@ def write_station_status(station_status_df):
 def main():
     # Init Spark
     spark = create_spark_session()
-    spark.sparkContext.setLogLevel("ERROR")
+    spark.sparkContext.setLogLevel("OFF")
     # Init Cassandra
     cluster = Cluster([IP_CASSANDRA_NODE])
     session = cluster.connect()
@@ -237,7 +236,7 @@ def main():
         .outputMode("append") \
         .start()
     
-    time.sleep(10)
+    time.sleep(2)
 
     df_capacity = spark.read \
         .format("org.apache.spark.sql.cassandra") \
