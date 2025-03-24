@@ -17,16 +17,14 @@ def main():
     topics_urls_keys = {
         "station_information":['https://gbfs.partners.fifteen.eu/gbfs/2.2/brest/en/station_information.json','stations'],
         "station_status":['https://gbfs.partners.fifteen.eu/gbfs/2.2/brest/en/station_status.json','stations'],
-        "vehicle_types":['https://gbfs.partners.fifteen.eu/gbfs/2.2/brest/en/vehicle_types.json','vehicle_types'],
-        "free_bike_status":['https://gbfs.partners.fifteen.eu/gbfs/2.2/brest/en/free_bike_status.json','bikes'],
-        "system_pricing_plans":['https://gbfs.partners.fifteen.eu/gbfs/2.2/brest/en/system_pricing_plans.json','plans']
+        "free_bike_status":['https://gbfs.partners.fifteen.eu/gbfs/2.2/brest/en/free_bike_status.json','bikes']
     }
-    # topic = sys.argv[1]
-    
     kafka_client = KafkaClient(bootstrap_servers='kafka:29092')
     
     admin = KafkaAdminClient(bootstrap_servers='kafka:29092')
+
     server_topics = admin.list_topics()
+
     num_partition = 2
     # création du topic si celui-ci n'est pas déjà créé
     for topic, _ in topics_urls_keys.items():
@@ -53,7 +51,8 @@ def main():
             for row in data:
                 # print('row:',row)   
                 producer.send(topic, json.dumps(row).encode())
-            print("{} Produced {} station records".format(datetime.fromtimestamp(time.time()), len(data)))
+            print(
+                "{} Produced {} station records for {}".format(datetime.fromtimestamp(time.time()), len(data), topic))
         time.sleep(60)
 
 if __name__ == "__main__":
