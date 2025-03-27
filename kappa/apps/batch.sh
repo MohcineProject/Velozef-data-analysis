@@ -1,0 +1,1 @@
+spark-submit --packages com.datastax.spark:spark-cassandra-connector_2.12:3.5.0 --conf spark.cassandra.connection.host=cassandra1 --conf spark.cassandra.connection.port=9042 batch.py 
