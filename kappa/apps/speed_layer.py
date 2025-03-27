@@ -6,7 +6,7 @@ import time
 from cassandra.cluster import Cluster
 
 # Configuration constants
-IP_CASSANDRA_NODE = "172.22.0.4"
+IP_CASSANDRA_NODE = "cassandra1"
 KAFKA_BOOTSTRAP_SERVERS = "kafka:29092"
 TOPIC_STATION_STATUS = 'station_status'
 TOPIC_STATION_INFORMATION = 'station_information'
