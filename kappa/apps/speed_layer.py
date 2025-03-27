@@ -6,7 +6,7 @@ import time
 from cassandra.cluster import Cluster
 
 # Configuration constants
-IP_CASSANDRA_NODE = "172.22.0.4"
+IP_CASSANDRA_NODE = ['172.22.0.4','172.22.0.3']
 KAFKA_BOOTSTRAP_SERVERS = "kafka:29092"
 TOPIC_STATION_STATUS = 'station_status'
 TOPIC_STATION_INFORMATION = 'station_information'
@@ -15,7 +15,6 @@ KEYSPACE_NAME = 'velozef'
 CHECKPOINT_LOCATION = "tmp/checkpoints"
 PARQUET_CHECKPOINT = "parquet/checkpoint"
 STATION_STATUS_SAVE_PATH = "parquet/station_status"
-SAVE_LOGS_PATH = "parquet/save_logs.save_logs.txt"
 
 #### SCHEMAS ####
 stationstatusSchema = StructType([
@@ -175,9 +174,6 @@ def log_success(batch_df, batch_id):
     
     # Message de confirmation
     print(f"✅ Batch {batch_id} sauvegardé avec succès à {datetime.now()}")  # Log dans la console
-    # (Optionnel) Écriture dans un fichier log
-    with open(SAVE_LOGS_PATH, "a") as f:
-        f.write(f"{datetime.now()} - Batch {batch_id} sauvegardé\n")
 
 def write_abandoned_bikes(abandoned_bike_df):
 
@@ -210,7 +206,7 @@ def main():
     spark = create_spark_session()
     spark.sparkContext.setLogLevel("OFF")
     # Init Cassandra
-    cluster = Cluster([IP_CASSANDRA_NODE])
+    cluster = Cluster(IP_CASSANDRA_NODE)
     session = cluster.connect()
     create_cassandra_tables(session)
 
@@ -250,14 +246,14 @@ def main():
 
     # Sauvegarde du batch station_status en parquet
     df_station_status \
-        .withWatermark("timestamp", "10 minutes") \
+        .withWatermark("timestamp", "30 minutes") \
         .withColumn("day", date_format(col("timestamp"), "dd")) \
         .withColumn("hour", date_format(col("timestamp"), "HH")) \
         .writeStream \
         .foreachBatch(log_success) \
         .option("path", STATION_STATUS_SAVE_PATH) \
         .option("checkpointLocation", PARQUET_CHECKPOINT) \
-        .trigger(processingTime="10 minutes") \
+        .trigger(processingTime="60 minutes") \
         .start() 
         
 
