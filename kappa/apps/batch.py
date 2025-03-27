@@ -7,17 +7,20 @@ from functools import reduce
 from cassandra.cluster import Cluster
 
 #### PARAMS ####
-PARQUET_PATH = "parquet/station_status/day=26"
-IP_CASSANDRA = ['172.22.0.4','172.22.0.3']
+PARQUET_PATH = "parquet/station_status/day=27"
+IP_CASSANDRA = ['cassandra1','cassandra2']
 
 def initialize_spark():
     """Initialise et retourne une session Spark"""
     return SparkSession.builder \
         .appName("StationBatch") \
+        .config("spark.jars.packages", "org.apache.spark:spark-sql-kafka-0-10_2.12:3.5.1,com.datastax.spark:spark-cassandra-connector_2.12:3.4.1") \
+        .config("spark.cassandra.connection.host", ",".join(IP_CASSANDRA)) \
         .getOrCreate()
+
 def create_cassandra_tables(session):
     
-    station_status_query = f'''
+    station_status_query = '''
     CREATE TABLE IF NOT EXISTS velozef.batch_station_status (
         station_id TEXT PRIMARY KEY,
         name TEXT,
@@ -25,8 +28,8 @@ def create_cassandra_tables(session):
         hour_avg_docks_avail FLOAT,
         empty_occurrences_24h INT,
         full_occurrences_24h INT,
-        computation_timestamp TIMESTAMP,
-    )
+        computation_timestamp TIMESTAMP
+    );
     '''
     session.execute(station_status_query)
 
@@ -84,8 +87,8 @@ def compute_and_write_combined_stats(spark, df, current_time=datetime.now()):
     # 1. Calculer toutes les statistiques séparément
     avg_stats = df.groupBy("station_id") \
         .agg(
-            avg("num_bikes_available").alias("hour_avg_bikes_avail"),
-            avg("num_docks_available").alias("hour_avg_docks_avail")
+            avg("num_bikes_available").cast("float").alias("hour_avg_bikes_avail"),
+            avg("num_docks_available").cast("float").alias("hour_avg_docks_avail")
         )
     
     empty_stats = df.filter(col("num_bikes_available") == 0) \
@@ -191,6 +194,7 @@ def main():
     finally:
         if spark is not None:
             spark.stop()
+        cluster.shutdown()
 
 if __name__ == "__main__":
     sys.exit(main())

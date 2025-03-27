@@ -1,6 +1,6 @@
 from datetime import datetime
 from pyspark.sql import SparkSession
-from pyspark.sql.functions import col, from_json, window, sum, to_timestamp, count, date_format
+from pyspark.sql.functions import col, from_json, window, sum, to_timestamp, count, date_format , when
 from pyspark.sql.types import StructType, StructField, IntegerType, StringType, TimestampType, BooleanType
 import time
 from cassandra.cluster import Cluster
@@ -33,7 +33,10 @@ stationinformationSchema = StructType([
 bikestatusSchema = StructType([
     StructField("bike_id", StringType(), False),
     StructField("station_id", StringType(), False),
-    StructField("last_reported", IntegerType(), False)
+    StructField("last_reported", IntegerType(), False),
+    StructField("is_reserved", BooleanType(),False),
+    StructField("is_disabled", BooleanType(),False),
+    StructField("current_range_meters" , IntegerType(), False )
 ])
 
 #### SPARK ####
@@ -51,7 +54,7 @@ def create_cassandra_tables(session):
         'replication_factor' : 1
     }};'''
     
-    station_status_query = f'''
+    station_status_query = '''
     CREATE TABLE IF NOT EXISTS velozef.station_status_windowed (
     window_start TIMESTAMP,
     window_end TIMESTAMP,
@@ -79,10 +82,32 @@ def create_cassandra_tables(session):
         PRIMARY KEY ((window_start, window_end))
     );'''
 
+    bike_situation_query = f'''
+    CREATE TABLE IF NOT EXISTS {KEYSPACE_NAME}.bike_situation (
+        timestamp TIMESTAMP,
+        bike_id TEXT PRIMARY KEY,
+        station_id TEXT,
+        situation TEXT
+    );
+
+    '''
+
+    most_charged_bikes_query = f'''
+    CREATE TABLE IF NOT EXISTS {KEYSPACE_NAME}.most_charged_bikes(
+        timestamp TIMESTAMP,
+        bike_id TEXT PRIMARY KEY,
+        station_id TEXT,
+        station_name TEXT
+    );
+
+    '''
+
     session.execute(keyspace_query)
     session.execute(station_status_query)
     session.execute(station_information_query)
     session.execute(bike_status_query)
+    session.execute(bike_situation_query)
+    session.execute(most_charged_bikes_query)
 
 def read_kafka_stream(spark, topic):
     return spark \
@@ -148,6 +173,52 @@ def process_abandoned_bikes(df_bike_status):
     
     return abandoned_df
 
+
+def process_reserved_and_disabled_bikes(df_bike_status) :
+    """Traitement des vélos réservés et non fonctionnels"""
+    # Définition d'une column timestamp 
+    df_bike_status = df_bike_status.withColumn("timestamp", to_timestamp(col("last_reported")))
+
+    # 
+    df_bike_stituation = df_bike_status.\
+                            withWatermark("timestamp" , "120 seconds").\
+                            filter((col("is_reserved") == True) | (col("is_disabled")== True )).\
+                            withColumn("situation",
+                            when((col("is_reserved") == True) & (col("is_disabled") == True), "BOTH")
+                            .when(col("is_reserved") == True, "RESERVED")
+                            .when(col("is_disabled") == True, "DISABLED")
+                            .otherwise(None) 
+                            )
+    
+    return df_bike_stituation
+    
+def process_most_charged_bikes(df_bike_status, df_capacity):
+    """List the top 3 charged bikes and their stations"""
+    df_top_3_charged_bikes = df_bike_status.join(df_capacity, "station_id") \
+        .withColumn("timestamp", to_timestamp(col("last_reported"))) \
+        .withWatermark("timestamp", "120 seconds") \
+        .orderBy(col("current_range_meters").desc()) \
+        .limit(3) \
+        .drop("is_reserved", "is_disabled", "capacity")
+    return df_top_3_charged_bikes
+
+
+def write_to_cassandra_most_charged_bikes(write_df) : 
+    write_df.write\
+            .format("org.apache.spark.sql.cassandra")\
+            .mode("overwrite")\
+            .options(table="most_charged_bikes" , keyspace=KEYSPACE_NAME)\
+            .save()
+
+
+def write_to_cassandra_bike_situation(writeDF) :
+    """Write the situation of a bike to cassandra"""
+    writeDF.write\
+            .format("org.apache.spark.sql.cassandra")\
+            .mode("overwrite")\
+            .options(table="bike_situation", keyspace=KEYSPACE_NAME)\
+            .save()
+
 def write_to_cassandra_station(writeDF, epochId):
     """Write station status data to Cassandra."""
     writeDF.write \
@@ -199,7 +270,27 @@ def write_station_status(station_status_df):
         .option("spark.cassandra.output.batch.size.rows", "50") \
         .trigger(processingTime="60 seconds") \
         .start()
-        
+
+def write_reserved_and_disabled(disabled_and_reserved_df) : 
+    disabled_and_reserved_df.writeStream \
+                            .foreachBatch(write_to_cassandra_bike_situation)\
+                            .option("spark.cassandra.connection.host", IP_CASSANDRA_NODE) \
+                            .option("checkpointLocation", f"{CHECKPOINT_LOCATION}/bike_situation") \
+                            .outputMode("update") \
+                            .option("spark.cassandra.connection.keep_alive_ms", "60000") \
+                            .trigger(processingTime="60 seconds") \
+                            .start()
+                            
+
+def write_most_charged_bikes(most_charged_bikes_df) :
+    most_charged_bikes_df.writeStream\
+                         .foreachBatch(write_to_cassandra_most_charged_bikes)\
+                         .option("spark.cassandra.connection.host", IP_CASSANDRA_NODE) \
+                         .option("checkpointLocation", f"{CHECKPOINT_LOCATION}/most_charged_bikes") \
+                         .outputMode("update") \
+                         .option("spark.cassandra.connection.keep_alive_ms", "60000") \
+                         .trigger(processingTime="60 seconds") \
+                         .start()
 
 def main():
     # Init Spark
@@ -243,6 +334,8 @@ def main():
     ##### TRAITEMENTS #####
     windowed_df = process_station_status(df_station_status, df_capacity)
     abandoned_df = process_abandoned_bikes(df_bike_status) 
+    disabled_and_reserved_df = process_reserved_and_disabled_bikes(df_bike_status)
+    most_charged_bikes_df = process_most_charged_bikes(df_bike_status ,df_capacity )
 
     # Sauvegarde du batch station_status en parquet
     df_station_status \
@@ -260,6 +353,8 @@ def main():
     # Create and start threads
     write_abandoned_bikes(abandoned_df)
     write_station_status(windowed_df)
+    write_reserved_and_disabled(disabled_and_reserved_df)
+    write_most_charged_bikes(most_charged_bikes_df)
     spark.streams.awaitAnyTermination()
 
 if __name__ == "__main__":
