@@ -129,7 +129,19 @@ services:
       - MAX_HEAP_SIZE=2048M
     networks:
       - network1
-
+  django-env:
+    build:
+      context: client/docker
+      dockerfile: Dockerfile
+    container_name: django
+    ports:
+      - "8000:8000"  
+    volumes:
+      - ./client/app:/app  
+    networks:
+      - network1
+    stdin_open: true
+    tty: true  
 
 networks:
   network1:

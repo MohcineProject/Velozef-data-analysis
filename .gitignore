@@ -1,2 +1,6 @@
 kappa/apps/parquet
 kappa/apps/tmp
+kappa/client/app/velozefClient/velozefClient/__pycache__
+kappa/client/app/velozefClient/visuals/__pycache__
+kappa/client/app/velozefClient/visuals/templatetags/__pycache__
+kappa/client/app/velozefClient/db.sqlite3

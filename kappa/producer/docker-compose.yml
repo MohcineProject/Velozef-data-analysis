@@ -6,8 +6,6 @@ services:
     stdin_open: true # docker run -i
     tty: true        # docker run -t
     container_name: producer
-    ports:
-      - '8000:8000'
     restart: "always"
     command: /bin/bash
     networks:

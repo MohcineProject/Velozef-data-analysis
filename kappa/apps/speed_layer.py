@@ -6,7 +6,7 @@ import time
 from cassandra.cluster import Cluster
 
 # Configuration constants
-IP_CASSANDRA_NODE = ['172.22.0.4','172.22.0.3']
+IP_CASSANDRA_NODE = ['cassandra1','cassandra2']
 KAFKA_BOOTSTRAP_SERVERS = "kafka:29092"
 TOPIC_STATION_STATUS = 'station_status'
 TOPIC_STATION_INFORMATION = 'station_information'
@@ -44,9 +44,11 @@ def create_spark_session():
     return SparkSession.builder \
         .appName("Spark-Kafka-Cassandra") \
         .config("spark.jars.packages", "org.apache.spark:spark-sql-kafka-0-10_2.12:3.5.1,com.datastax.spark:spark-cassandra-connector_2.12:3.4.1") \
-        .config("spark.cassandra.connection.host", IP_CASSANDRA_NODE) \
+        .config("spark.cassandra.connection.host", ",".join(IP_CASSANDRA_NODE)) \
         .getOrCreate()
 
+
+### CASSANDRA SETUP ###
 def create_cassandra_tables(session):
     keyspace_query = f'''
     CREATE KEYSPACE IF NOT EXISTS {KEYSPACE_NAME} WITH replication = {{
@@ -97,7 +99,7 @@ def create_cassandra_tables(session):
         timestamp TIMESTAMP,
         bike_id TEXT PRIMARY KEY,
         station_id TEXT,
-        station_name TEXT
+        name TEXT
     );
 
     '''
@@ -109,6 +111,8 @@ def create_cassandra_tables(session):
     session.execute(bike_situation_query)
     session.execute(most_charged_bikes_query)
 
+
+### READING KAFKA STREAM ###
 def read_kafka_stream(spark, topic):
     return spark \
         .readStream \
@@ -119,11 +123,15 @@ def read_kafka_stream(spark, topic):
         .option("failOnDataLoss", "false") \
         .load()
 
+
+### TRANSFORM STREAM TO DF ###
 def stream_to_df(stream, schema):
     return stream.selectExpr("CAST(value AS STRING)") \
                  .select(from_json(col("value"), schema).alias("data")) \
                  .select("data.*")
 
+
+### PROCESSING STEPS ###
 def process_station_status(df_station_status, df_capacity):
     """Traitements : 
     - 1 | Calcul du nombre de stations pleines/vides/proche de saturation par fenêtre de 60 secondes
@@ -188,7 +196,8 @@ def process_reserved_and_disabled_bikes(df_bike_status) :
                             .when(col("is_reserved") == True, "RESERVED")
                             .when(col("is_disabled") == True, "DISABLED")
                             .otherwise(None) 
-                            )
+                            )\
+                            .drop("last_reported", "is_reserved", "is_disabled", "current_range_meters")
     
     return df_bike_stituation
     
@@ -197,25 +206,30 @@ def process_most_charged_bikes(df_bike_status, df_capacity):
     df_top_3_charged_bikes = df_bike_status.join(df_capacity, "station_id") \
         .withColumn("timestamp", to_timestamp(col("last_reported"))) \
         .withWatermark("timestamp", "120 seconds") \
-        .orderBy(col("current_range_meters").desc()) \
-        .limit(3) \
-        .drop("is_reserved", "is_disabled", "capacity")
+        .drop("is_reserved", "is_disabled", "capacity", "last_reported" )\
+    
     return df_top_3_charged_bikes
 
 
-def write_to_cassandra_most_charged_bikes(write_df) : 
+
+
+### WRITING BATCHES TO CASSANDRA ###
+def write_to_cassandra_most_charged_bikes(write_df, epochId) : 
+    write_df = write_df.sort(col("current_range_meters").desc()).limit(3).drop("current_range_meters")
     write_df.write\
             .format("org.apache.spark.sql.cassandra")\
             .mode("overwrite")\
+            .option("confirm.truncate", "true") \
             .options(table="most_charged_bikes" , keyspace=KEYSPACE_NAME)\
             .save()
 
 
-def write_to_cassandra_bike_situation(writeDF) :
+def write_to_cassandra_bike_situation(writeDF,epochId) :
     """Write the situation of a bike to cassandra"""
     writeDF.write\
             .format("org.apache.spark.sql.cassandra")\
             .mode("overwrite")\
+            .option("confirm.truncate", "true") \
             .options(table="bike_situation", keyspace=KEYSPACE_NAME)\
             .save()
 
@@ -234,7 +248,10 @@ def write_to_cassandra_bike(writeDF, epochId):
         .mode('append') \
         .options(table="bike_status", keyspace=KEYSPACE_NAME) \
         .save()
+    
 
+
+### SAVING BATCHES TO LOCAL IN PARQUETS ###
 def log_success(batch_df, batch_id):
     # Sauvegarde du batch en Parquet
     batch_df.write \
@@ -246,11 +263,13 @@ def log_success(batch_df, batch_id):
     # Message de confirmation
     print(f"✅ Batch {batch_id} sauvegardé avec succès à {datetime.now()}")  # Log dans la console
 
+
+
+### WRITING STREAMS TO CASSANDRA ###
 def write_abandoned_bikes(abandoned_bike_df):
 
     abandoned_bike_df.writeStream \
         .foreachBatch(write_to_cassandra_bike) \
-        .option("spark.cassandra.connection.host", IP_CASSANDRA_NODE) \
         .option("checkpointLocation", f"{CHECKPOINT_LOCATION}/abandoned_bikes") \
         .outputMode("update") \
         .option("spark.cassandra.connection.keep_alive_ms", "60000") \
@@ -263,7 +282,6 @@ def write_station_status(station_status_df):
 
     station_status_df.writeStream \
         .foreachBatch(write_to_cassandra_station) \
-        .option("spark.cassandra.connection.host", IP_CASSANDRA_NODE) \
         .option("checkpointLocation", f"{CHECKPOINT_LOCATION}/station_status") \
         .outputMode("update") \
         .option("spark.cassandra.connection.keep_alive_ms", "60000") \
@@ -274,7 +292,6 @@ def write_station_status(station_status_df):
 def write_reserved_and_disabled(disabled_and_reserved_df) : 
     disabled_and_reserved_df.writeStream \
                             .foreachBatch(write_to_cassandra_bike_situation)\
-                            .option("spark.cassandra.connection.host", IP_CASSANDRA_NODE) \
                             .option("checkpointLocation", f"{CHECKPOINT_LOCATION}/bike_situation") \
                             .outputMode("update") \
                             .option("spark.cassandra.connection.keep_alive_ms", "60000") \
@@ -285,13 +302,15 @@ def write_reserved_and_disabled(disabled_and_reserved_df) :
 def write_most_charged_bikes(most_charged_bikes_df) :
     most_charged_bikes_df.writeStream\
                          .foreachBatch(write_to_cassandra_most_charged_bikes)\
-                         .option("spark.cassandra.connection.host", IP_CASSANDRA_NODE) \
                          .option("checkpointLocation", f"{CHECKPOINT_LOCATION}/most_charged_bikes") \
                          .outputMode("update") \
                          .option("spark.cassandra.connection.keep_alive_ms", "60000") \
                          .trigger(processingTime="60 seconds") \
                          .start()
 
+
+
+### LAUNCH MAIN PROGRAMM ###
 def main():
     # Init Spark
     spark = create_spark_session()
