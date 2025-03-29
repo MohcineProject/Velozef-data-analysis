@@ -3,9 +3,12 @@ from django.shortcuts import render
 from cassandra.cluster import Cluster
 
 def get_cassandra_data():
-    # Connect to the Cassandra cluster
-    cluster = Cluster(['cassandra1' , 'cassandra2']) 
-    session = cluster.connect('velozef')  
+    # Connect to the Cassandra cluster, return None if connection failed
+    try : 
+        cluster = Cluster(['cassandra1' , 'cassandra2']) 
+        session = cluster.connect('velozef')  
+    except Exception  : 
+        return None 
 
     # List of tables in the keyspace
     tables = ["station_information", "station_status_windowed", "most_charged_bikes" , "bike_situation" , "bike_status" , "batch_station_status"]  
@@ -26,6 +29,10 @@ def get_cassandra_data():
 def home(request):
     # Get the Cassandra data
     data = get_cassandra_data()
+
+    # Check if data is None
+    if data is None : 
+        return render(request, 'exceptions/cassandra_not_available.html')
 
     # Render the page with the data
     return render(request, 'main/home.html', {'data': data})

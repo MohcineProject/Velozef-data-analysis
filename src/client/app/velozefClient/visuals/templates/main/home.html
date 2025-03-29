@@ -1,0 +1,137 @@
+{% load replace_underscores %}
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>VeloZef</title>
+  <style>
+    body {
+      font-family: 'Arial', sans-serif;
+      background-color: #f4f4f4;
+      margin: 0;
+      padding: 0;
+    }
+    h1 {
+      background: linear-gradient(90deg, #4CAF50, #3B8E2A);
+      color: white;
+      text-align: center;
+      padding: 30px;
+      margin: 0;
+      font-size: 3rem;
+      text-transform: uppercase;
+      letter-spacing: 2px;
+    }
+    .table-container {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 20px;
+      gap: 30px;
+      overflow-y: auto;
+    }
+    table {
+      width: auto;  /* Reduced table width */
+      margin: 0 auto;
+      border-collapse: collapse;
+      border-radius: 8px;
+      overflow: hidden;
+      background-color: white;
+      box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+      table-layout: auto;
+    }
+    th, td {
+      padding: 12px;
+      text-align: center;
+      border-bottom: 1px solid #ddd;
+      word-wrap: break-word;
+    }
+    th {
+      background-color: #4CAF50;
+      color: white;
+      font-size: 1.2rem;
+      text-transform: capitalize;
+    }
+    td {
+      background-color: #f9f9f9;
+      font-size: 1rem;
+    }
+    tr:nth-child(even) td {
+      background-color: #f2f2f2;
+    }
+    tr:hover td {
+      background-color: #e2f7e2;
+    }
+    .table-container table {
+      max-height: 400px;
+      overflow-y: auto;
+      display: block;
+    }
+    h2 {
+      color: #333;
+      font-size: 1.8rem;
+      text-align: center;
+      text-transform: capitalize;
+      margin-bottom: 10px;
+    }
+    /* Style for alternating row colors */
+    tr:nth-child(even) {
+      background-color: #f9f9f9;
+    }
+    tr:nth-child(odd) {
+      background-color: #ffffff;
+    }
+    .table-container table td {
+      font-size: 1rem;
+      color: #333;
+    }
+    .no-data {
+      text-align: center;
+      font-size: 1.2rem;
+      color: #333;
+      padding: 20px;
+      background-color: #fff;
+      border-radius: 8px;
+      box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+    }
+  </style>
+</head>
+<body>
+
+  <h1>VeloZef</h1>
+
+  <div class="table-container">
+    {% if not data %}
+      <div class="no-data">
+        <p>No data available to display.</p>
+      </div>
+    {% else %}
+      {% for table, table_data in data.items %}
+        <div>
+          <h2>{{ table | replace_underscores | title }}</h2>
+          <table>
+            <thead>
+              <tr>
+                {% for column in table_data.columns %}
+                  <th>{{ column | title }}</th>
+                {% endfor %}
+              </tr>
+            </thead>
+            <tbody>
+              {% for row in table_data.rows %}
+                <tr>
+                  {% for value in row %}
+                    <td>{{ value }}</td>
+                  {% endfor %}
+                </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      {% endfor %}
+    {% endif %}
+  </div>
+
+</body>
+</html>

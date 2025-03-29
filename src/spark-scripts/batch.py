@@ -6,22 +6,38 @@ from datetime import datetime, timedelta
 from functools import reduce
 from cassandra.cluster import Cluster
 
+
 #### PARAMS ####
 PARQUET_PATH = "parquet/station_status/day=27"
 IP_CASSANDRA = ['cassandra1','cassandra2']
+KEYSPACE_NAME = "velozef"
 
 def initialize_spark():
     """Initialise et retourne une session Spark"""
-    return SparkSession.builder \
+    session = SparkSession.builder \
         .appName("StationBatch") \
         .config("spark.jars.packages", "org.apache.spark:spark-sql-kafka-0-10_2.12:3.5.1,com.datastax.spark:spark-cassandra-connector_2.12:3.4.1") \
         .config("spark.cassandra.connection.host", ",".join(IP_CASSANDRA)) \
+        .config("spark.cassandra.input.consistency.level", "ONE")\
+        .config("spark.cassandra.output.consistency.level", "ONE") \
         .getOrCreate()
 
+    sc = session.sparkContext
+    sc.setLogLevel("OFF")
+
+    return session
+
 def create_cassandra_tables(session):
+    """Crée les tables nécessaires dans cassandra"""
+
+    keyspace_query = f'''
+    CREATE KEYSPACE IF NOT EXISTS {KEYSPACE_NAME} WITH replication = {{
+        'class' : 'SimpleStrategy',
+        'replication_factor' : 2
+    }};'''
     
-    station_status_query = '''
-    CREATE TABLE IF NOT EXISTS velozef.batch_station_status (
+    station_status_query = f'''
+    CREATE TABLE IF NOT EXISTS {KEYSPACE_NAME}.batch_station_status (
         station_id TEXT PRIMARY KEY,
         name TEXT,
         hour_avg_bikes_avail FLOAT,
@@ -31,8 +47,8 @@ def create_cassandra_tables(session):
         computation_timestamp TIMESTAMP
     );
     '''
+    session.execute(keyspace_query)
     session.execute(station_status_query)
-
 
 def get_existing_partitions(base_path):
     """
@@ -157,6 +173,7 @@ def main():
     # init cassandra session
     cluster = Cluster(IP_CASSANDRA)
     session = cluster.connect() 
+
 
     try:
         # Initialisation

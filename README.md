@@ -1,131 +1,67 @@
-# Architecture Kappa with Docker & docker-compose
+# Velozef Big data project
 
 # General
 
-A simple spark standalone cluster for your testing environment purposses. A *docker-compose up* away from you solution for your spark development environment.
+This project establishes a big data processing infrastructure to analyze the upcoming data from the [ velozef API ](https://www.data.gouv.fr/fr/datasets/velos-a-assistance-electrique-en-libre-service-velozef-sur-brest/#/resources), a company that offers bikes for public usage in Brest and Plouzané at France. 
 
-The Docker compose will create the following containers:
-
-container|Exposed ports
----|---
-spark-master|9090 7077
-spark-worker-1|9091
-spark-worker-2|9092
-demo-database|5432
+The whole project is containerized and can be deployed directly on docker.
 
 # Installation
 
-The following steps will make you run your spark cluster's containers.
-
-## Pre requisites
+To run the project you need these simple prerequisites : 
 
 * Docker installed
 
 * Docker compose  installed
 
-## Build the image
-
-
-```sh
-docker build -t cluster-apache-spark:3.0.2 .
-```
-
-## Run the docker-compose
-
-The final step to create your test cluster will be to run the compose file:
+Lastly, make sure to have docker on, navigate to the source folder `src`, and run the docker-compose command to deploy your architecture :
 
 ```sh
 docker-compose up -d
 ```
 
-## Validate your cluster
-
-Just validate your cluster accesing the spark UI on each worker & master URL.
-
-### Spark Master
-
-http://localhost:9090/
-
-![alt text](./images/spark-master.png "Spark master UI")
-
-### Spark Worker 1
-
-http://localhost:9091/
-
-![alt text](./images/spark-worker-1.png "Spark worker 1 UI")
-
-### Spark Worker 2
-
-http://localhost:9092/
-
-![alt text](./images/spark-worker-2.png "Spark worker 2 UI")
+And that's all, your application is ready ! 
 
 
-# Resource Allocation 
+# Steps to follow :
 
-This cluster is shipped with three workers and one spark master, each of these has a particular set of resource allocation(basically RAM & cpu cores allocation).
+### Running the producer 
 
-* The default CPU cores allocation for each spark worker is 1 core.
+First you need to run the producer to capture the data sent from the velozef API and store it in kafka. To do that you should run the producer script inside the container.
 
-* The default RAM for each spark-worker is 1024 MB.
+Run the following command : 
 
-* The default RAM allocation for spark executors is 256mb.
-
-* The default RAM allocation for spark driver is 128mb
-
-* If you wish to modify this allocations just edit the env/spark-worker.sh file.
-
-# Binded Volumes
-
-To make app running easier I've shipped two volume mounts described in the following chart:
-
-Host Mount|Container Mount|Purposse
----|---|---
-apps|/opt/spark-apps|Used to make available your app's jars on all workers & master
-data|/opt/spark-data| Used to make available your app's data on all workers & master
-
-This is basically a dummy DFS created from docker Volumes...(maybe not...)
-
-# Run Sample applications
-
-<!-- ```sh
-docker exec -it tp3_docker-spark-worker-a bash
+```bash
+ docker exec -it producer python producer_velozef.py
 ```
 
-To submit the app connect to one of the workers or the master and execute:
+### Start the spark jobs 
 
-```sh
-/opt/spark/bin/spark-submit --master spark://spark-master:7077 \
---driver-memory 1G \
---executor-memory 1G \
-/opt/spark-apps/TP3_exercice1_DataFrame.py
+After storing the records in kafka, you need to start the spark jobs. We have two scripts for this purpose, one for **stream processing** and another for **batch processing**.
+The stream processing script also handles storing data in a parquet format using a partition of days and hours. This data is used afterwards for batch processing, so before executing the second script you need to run the stream process for a while ( 24h idealy since our goal is to compute metrics for a day, but you can go shorter and have the mesures for your specific window ).
+
+Run the following command to start the streaming process : 
+
+```bash
+docker exec -it spark-master python3 speed_layer.py 
 ```
 
-```sh
-/opt/spark/bin/spark-submit --master spark://spark-master:7077 \
-/opt/spark-apps/TP3_exercice1_DataFrame.py
+Then after saving enough data into parquet format ( check the directory src/spark-scripts/parquet/station_status to check your data partition), run the batch process : 
+
+```bash
+ docker exec -it spark-master  python3 batch.py 
 ```
 
-```sh
-python3 /opt/spark-apps/TP3_exercice1_DataFrame.py
-```
+### Visualize your data ! 
+Finally, you can access the django app to visualize your computations : 
 
-![alt text](./images/pyspark-demo.png "Spark UI with pyspark program running") -->
+Visit the following (URL)[http://localhost:8000/]
 
-# Lancements
 
-Lancer simultanéement 3 terminaux, un pour kafka producer, un pour cassandra1, un pour lancer le script de lecture et traitement de flux kafka via Spark Streaming
+# Notes :
 
-```sh
-$ docker exec -ti producer bash
-cd .. 
-cd producer/app 
-python3 producer_velozef.py
-```
+- If you are using windows, avoid modifying the script start-spark.sh, as it introduces some characters to the script that that prevents bash from running it on linux containers.
 
-```sh
-$ docker exec -ti spark-master bash
-cd ../spark-apps
-bash speed_layer.sh
-```
+- If your pc ressources are low you can run the `docker-compose-mini`. It deploys the same architecture but without the spark workers and using only one cassandra node. 
 
+- **IMPORTANT NOTE** : We have set the consistency level to one for both input and output in our scripts with a replication factor of 2. This was done to ensure both configurations `docker-compose` and `docker-compose-mini` work for the same script. In fact, the spark cassandra extension needs to read/write data from a quorum of nodes. In the case of two cassandra nodes, the cassandra extension must ensure reads and writes to at least two nodes. For this reason, and to make our scripts working for the two architectures, we set the consistency level to one, this way spark only requires data written and read to at least one node, which is functionnal for both cases.

@@ -24,6 +24,9 @@ RUN pip install -r requirements.txt
 # Copy source code
 COPY ./app ./app
 
+# Change the directory to the app folder for easy access 
+WORKDIR /publisher/app
+
 # Run the application
 CMD ["bash"]
 # CMD ["python", "app/producer.py","velib-stations"]

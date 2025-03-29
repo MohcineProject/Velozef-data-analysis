@@ -41,23 +41,27 @@ bikestatusSchema = StructType([
 
 #### SPARK ####
 def create_spark_session():
+    """Initialise et retourne une session Spark"""
     return SparkSession.builder \
         .appName("Spark-Kafka-Cassandra") \
         .config("spark.jars.packages", "org.apache.spark:spark-sql-kafka-0-10_2.12:3.5.1,com.datastax.spark:spark-cassandra-connector_2.12:3.4.1") \
         .config("spark.cassandra.connection.host", ",".join(IP_CASSANDRA_NODE)) \
+        .config("spark.cassandra.input.consistency.level", "ONE")\
+        .config("spark.cassandra.output.consistency.level", "ONE") \
         .getOrCreate()
 
 
 ### CASSANDRA SETUP ###
 def create_cassandra_tables(session):
+    """Crée les tables nécessaires dans cassandra"""
     keyspace_query = f'''
     CREATE KEYSPACE IF NOT EXISTS {KEYSPACE_NAME} WITH replication = {{
         'class' : 'SimpleStrategy',
-        'replication_factor' : 1
+        'replication_factor' : 2
     }};'''
     
-    station_status_query = '''
-    CREATE TABLE IF NOT EXISTS velozef.station_status_windowed (
+    station_status_query = f'''
+    CREATE TABLE IF NOT EXISTS {KEYSPACE_NAME}.station_status_windowed (
     window_start TIMESTAMP,
     window_end TIMESTAMP,
     empty_count INT,
@@ -114,6 +118,7 @@ def create_cassandra_tables(session):
 
 ### READING KAFKA STREAM ###
 def read_kafka_stream(spark, topic):
+    """Lit les données du topic spécifié dans kafka"""
     return spark \
         .readStream \
         .format("kafka") \
@@ -126,6 +131,7 @@ def read_kafka_stream(spark, topic):
 
 ### TRANSFORM STREAM TO DF ###
 def stream_to_df(stream, schema):
+    """Conversion du stream en dataframe structuré avec le schéma spécifié"""
     return stream.selectExpr("CAST(value AS STRING)") \
                  .select(from_json(col("value"), schema).alias("data")) \
                  .select("data.*")
@@ -187,7 +193,7 @@ def process_reserved_and_disabled_bikes(df_bike_status) :
     # Définition d'une column timestamp 
     df_bike_status = df_bike_status.withColumn("timestamp", to_timestamp(col("last_reported")))
 
-    # 
+    # Sélection des vélos réservés ou en panne
     df_bike_stituation = df_bike_status.\
                             withWatermark("timestamp" , "120 seconds").\
                             filter((col("is_reserved") == True) | (col("is_disabled")== True )).\
