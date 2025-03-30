@@ -7,8 +7,22 @@ from functools import reduce
 from cassandra.cluster import Cluster
 
 
+### GETTING THE PASSED ARGUMENTS ###
+
+if len(sys.argv) < 2 : 
+    print("Missing the day argument for batch processing") 
+    sys.exit(1)
+input = sys.argv[1] 
+try : 
+    day = int(input)
+    if day <=0 or day >31 : 
+        raise Exception("The day should be a valid integer between 0 and 31")
+except Exception as e :
+    print("Error in parsing day argument" , str(e))
+
+
 #### PARAMS ####
-PARQUET_PATH = "parquet/station_status/day=27"
+PARQUET_PATH = f"parquet/station_status/day={day}"
 IP_CASSANDRA = ['cassandra1','cassandra2']
 KEYSPACE_NAME = "velozef"
 
@@ -39,7 +53,7 @@ def create_cassandra_tables(session):
     station_status_query = f'''
     CREATE TABLE IF NOT EXISTS {KEYSPACE_NAME}.batch_station_status (
         station_id TEXT PRIMARY KEY,
-        name TEXT,
+        station_name TEXT,
         hour_avg_bikes_avail FLOAT,
         hour_avg_docks_avail FLOAT,
         empty_occurrences_24h INT,
@@ -131,7 +145,7 @@ def compute_and_write_combined_stats(spark, df, current_time=datetime.now()):
         "left"
     ).select(
         "station_id",
-        "name",
+        "station_name",
         "hour_avg_bikes_avail",
         "hour_avg_docks_avail",
         "empty_occurrences_24h",

@@ -1,6 +1,6 @@
 from datetime import datetime
 from pyspark.sql import SparkSession
-from pyspark.sql.functions import col, from_json, window, sum, to_timestamp, count, date_format , when
+from pyspark.sql.functions import col, from_json, sum, to_timestamp, count, date_format , when
 from pyspark.sql.types import StructType, StructField, IntegerType, StringType, TimestampType, BooleanType
 import time
 from cassandra.cluster import Cluster
@@ -62,38 +62,38 @@ def create_cassandra_tables(session):
     
     station_status_query = f'''
     CREATE TABLE IF NOT EXISTS {KEYSPACE_NAME}.station_status_windowed (
-    window_start TIMESTAMP,
-    window_end TIMESTAMP,
+    day DATE,
+    timestamp TIMESTAMP ,
     empty_count INT,
-    full_count INT,
     saturation_count INT,
+    full_count INT,
     total_docks_available INT,
     total_bikes_available INT,
-    PRIMARY KEY ((window_start), window_end) 
-    ) WITH CLUSTERING ORDER BY (window_end DESC);  
+    PRIMARY KEY ((day), timestamp)  
+    ) WITH CLUSTERING ORDER BY (timestamp DESC);  
     '''
 
     station_information_query = f'''
     CREATE TABLE IF NOT EXISTS {KEYSPACE_NAME}.station_information (
         station_id TEXT PRIMARY KEY,
+        station_name TEXT,
         capacity INT,
-        name TEXT
     );'''
 
     bike_status_query = f'''
     CREATE TABLE IF NOT EXISTS {KEYSPACE_NAME}.bike_status (
-        window_start TIMESTAMP,
-        window_end TIMESTAMP,
+        day DATE,
+        timestamp TIMESTAMP,
         abandoned_bikes_count INT,
-        PRIMARY KEY ((window_start, window_end))
-    );'''
+        PRIMARY KEY ((day), timestamp)  
+    ) WITH CLUSTERING ORDER BY (timestamp DESC);'''
 
     bike_situation_query = f'''
     CREATE TABLE IF NOT EXISTS {KEYSPACE_NAME}.bike_situation (
         timestamp TIMESTAMP,
         bike_id TEXT PRIMARY KEY,
-        station_id TEXT,
-        situation TEXT
+        situation TEXT,
+        station_name TEXT,
     );
 
     '''
@@ -102,8 +102,7 @@ def create_cassandra_tables(session):
     CREATE TABLE IF NOT EXISTS {KEYSPACE_NAME}.most_charged_bikes(
         timestamp TIMESTAMP,
         bike_id TEXT PRIMARY KEY,
-        station_id TEXT,
-        name TEXT
+        station_name TEXT
     );
 
     '''
@@ -146,7 +145,7 @@ def process_station_status(df_station_status, df_capacity):
     df_station_status = df_station_status.withColumn("timestamp", to_timestamp(col("last_reported")))
     df_joined = df_station_status.join(df_capacity, "station_id")
     
-    # 1 | Calcul du nombre de stations pleines/vides/proche de saturation par fenêtre de 60 secondes
+    # 1 | Calcul du nombre de stations pleines/vides/proche de saturation 
     required_columns = ["num_bikes_available", "capacity"]
     if all(column in df_joined.columns for column in required_columns):
         df_processed = df_joined.withColumn("is_full", (col("num_bikes_available") / col("capacity") == 1).cast("int")) \
@@ -155,19 +154,16 @@ def process_station_status(df_station_status, df_capacity):
     else:
         raise ValueError(f"Les colonnes requises {required_columns} ne sont pas toutes présentes dans le DataFrame.")
 
-    windowed_df = df_processed \
+    df_station_status = df_processed \
                     .withWatermark("timestamp", "10 minutes") \
-                    .groupBy(window(col("timestamp"), "60 seconds")) \
+                    .groupBy(col("timestamp"))\
                     .agg(sum(col("num_bikes_available")).alias("total_bikes_available"),
                         sum(col('num_docks_available')).alias("total_docks_available"),
                         sum(col("is_empty")).alias("empty_count"),
                         sum(col("is_full")).alias("full_count"),
                         sum(col("saturation")).alias("saturation_count")) \
-                    .withColumn("window_start", col("window.start")) \
-                    .withColumn("window_end", col("window.end")) \
-                    .drop("window")
-
-    return windowed_df
+                    .withColumn("day" , date_format(col("timestamp") ,"yyyy-MM-dd"))
+    return df_station_status
 
 def process_abandoned_bikes(df_bike_status):
     """Traitement des vélos abandonnés."""
@@ -179,16 +175,14 @@ def process_abandoned_bikes(df_bike_status):
     # Compter les vélos abandonnés par fenêtre de 60 secondes
     abandoned_df = df_abandoned \
                             .withWatermark("timestamp", "10 minutes") \
-                            .groupBy(window(col("timestamp"), "60 seconds")) \
-                            .agg(count("*").alias("abandoned_bikes_count")) \
-                            .withColumn("window_start", col("window.start")) \
-                            .withColumn("window_end", col("window.end")) \
-                            .drop("window")
+                            .groupBy(col("timestamp"))\
+                            .agg(count("*").alias("abandoned_bikes_count"))\
+                            .withColumn("day" , date_format(col("timestamp") ,"yyyy-MM-dd"))                        
     
     return abandoned_df
 
 
-def process_reserved_and_disabled_bikes(df_bike_status) :
+def process_reserved_and_disabled_bikes(df_bike_status , df_capacity) :
     """Traitement des vélos réservés et non fonctionnels"""
     # Définition d'une column timestamp 
     df_bike_status = df_bike_status.withColumn("timestamp", to_timestamp(col("last_reported")))
@@ -203,7 +197,8 @@ def process_reserved_and_disabled_bikes(df_bike_status) :
                             .when(col("is_disabled") == True, "DISABLED")
                             .otherwise(None) 
                             )\
-                            .drop("last_reported", "is_reserved", "is_disabled", "current_range_meters")
+                            .join(df_capacity,"station_id")\
+                            .drop("last_reported", "is_reserved", "is_disabled", "current_range_meters" , "capacity" , "station_id")
     
     return df_bike_stituation
     
@@ -212,7 +207,7 @@ def process_most_charged_bikes(df_bike_status, df_capacity):
     df_top_3_charged_bikes = df_bike_status.join(df_capacity, "station_id") \
         .withColumn("timestamp", to_timestamp(col("last_reported"))) \
         .withWatermark("timestamp", "120 seconds") \
-        .drop("is_reserved", "is_disabled", "capacity", "last_reported" )\
+        .drop("is_reserved", "is_disabled", "capacity", "last_reported" , "station_id" )\
     
     return df_top_3_charged_bikes
 
@@ -335,6 +330,7 @@ def main():
     df_station_status = stream_to_df(station_status_stream, stationstatusSchema).withColumn("timestamp", to_timestamp(col("last_reported")))
 
     df_station_information = stream_to_df(station_information_stream, stationinformationSchema)
+    df_station_information = df_station_information.withColumn("station_name" , col("name")).drop(col("name")) # Change the name column to be more clear
     df_bike_status = stream_to_df(bike_status_stream, bikestatusSchema)
 
     # Stocke les informations de stations_information dans une table Cassandra
@@ -359,7 +355,7 @@ def main():
     ##### TRAITEMENTS #####
     windowed_df = process_station_status(df_station_status, df_capacity)
     abandoned_df = process_abandoned_bikes(df_bike_status) 
-    disabled_and_reserved_df = process_reserved_and_disabled_bikes(df_bike_status)
+    disabled_and_reserved_df = process_reserved_and_disabled_bikes(df_bike_status , df_capacity)
     most_charged_bikes_df = process_most_charged_bikes(df_bike_status ,df_capacity )
 
     # Sauvegarde du batch station_status en parquet

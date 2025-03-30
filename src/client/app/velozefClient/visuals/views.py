@@ -1,6 +1,9 @@
 # myapp/views.py
 from django.shortcuts import render
 from cassandra.cluster import Cluster
+import logging
+
+logger = logging.getLogger(__name__)
 
 def get_cassandra_data():
     # Connect to the Cassandra cluster, return None if connection failed
@@ -17,14 +20,20 @@ def get_cassandra_data():
     data = {}
 
     for table in tables:
-        # Get the column names for the current table
-        rows = session.execute(f"SELECT * FROM {table} LIMIT 30")  # Fetch the last 30 rows
-        columns = rows.column_names
+        try : 
+            # Get the column names for the current table
+            rows = session.execute(f"SELECT * FROM {table} LIMIT 30")  # Fetch the last 30 rows
+            columns = rows.column_names
 
-        # Store the columns and rows in the data dictionary
-        data[table] = {'columns': columns, 'rows': rows}
+            # Store the columns and rows in the data dictionary
+            data[table] = {'columns': columns, 'rows': rows}
+        except Exception : 
+            # Log the error if fetching data from the table fails
+            logger.error(f"Failed to fetch data from table: {table}", exc_info=True)
 
     return data
+
+
 
 def home(request):
     # Get the Cassandra data

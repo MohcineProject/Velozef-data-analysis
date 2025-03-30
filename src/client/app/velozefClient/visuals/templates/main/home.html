@@ -1,4 +1,5 @@
 {% load replace_underscores %}
+{% load round_number_if_exists %}
 
 <!DOCTYPE html>
 <html lang="en">
@@ -25,6 +26,7 @@
     }
     .table-container {
       display: flex;
+      position: relative;
       flex-direction: column;
       align-items: center;
       padding: 20px;
@@ -32,7 +34,7 @@
       overflow-y: auto;
     }
     table {
-      width: auto;  /* Reduced table width */
+      width: auto; 
       margin: 0 auto;
       border-collapse: collapse;
       border-radius: 8px;
@@ -75,7 +77,6 @@
       text-transform: capitalize;
       margin-bottom: 10px;
     }
-    /* Style for alternating row colors */
     tr:nth-child(even) {
       background-color: #f9f9f9;
     }
@@ -95,6 +96,9 @@
       border-radius: 8px;
       box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
     }
+
+
+
   </style>
 </head>
 <body>
@@ -102,6 +106,7 @@
   <h1>VeloZef</h1>
 
   <div class="table-container">
+
     {% if not data %}
       <div class="no-data">
         <p>No data available to display.</p>
@@ -122,8 +127,9 @@
               {% for row in table_data.rows %}
                 <tr>
                   {% for value in row %}
-                    <td>{{ value }}</td>
+                  <td>{{ value | round_number_if_exists }}</td>
                   {% endfor %}
+
                 </tr>
               {% endfor %}
             </tbody>
